@@ -294,7 +294,7 @@
     <div id="lobby-ready-container" style="display:flex; gap:10px; align-items:center; margin-top:15px;">
       <button class="btn green" id="ready-btn" onclick="readyUp()" disabled>READY UP</button>
       <div style="font-size:12px; color:var(--text3); font-family:'Space Mono',monospace">
-        Game starts when all players are ready (Minimum 2 players required).
+        Game starts when all players are ready.
       </div>
     </div>
     <div class="error-msg" id="lobby-error"></div>
@@ -390,12 +390,7 @@
   <div id="toast"></div>
 
   <script>
-    // ─── Cloud Deployment Synchronized Routing ───────────────────────────────
-    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    
-    // INTEGRATED LIVE LINK: Points directly to your deployment when online
-    const BACKEND_URL = isLocal ? 'http://localhost:3000' : 'https://marketmind-backend-st3p.onrender.com';
-
+    const serverIP = window.location.hostname || 'localhost';
     let socket     = null;
     let roomCode   = '';
     let isHost     = false;
@@ -417,8 +412,9 @@
 
     function connectSocket() {
       if (socket) return;
-      socket = io(BACKEND_URL);
+      socket = io(`http://${serverIP}:3000`);
 
+      // Instantly capture server-provided initialization codes
       socket.on('room:code', (data) => {
         roomCode = data.roomCode;
         document.getElementById('host-code-display').textContent = roomCode;
@@ -546,7 +542,8 @@
       socket.emit('power:activate', { targetTicker });
     }
 
-    function renderLobby(players) {
+   function renderLobby(players) {
+      // FIX: Only sync character choice if the socket ID matches this specific tab instance
       const relevantPlayer = players.find(p => p.id === socket.id);
       if (relevantPlayer) {
         myChar = relevantPlayer.character;
@@ -554,6 +551,8 @@
 
       renderChars();
       renderPlayers(players);
+      
+      // Keep ready button disabled if this tab hasn't chosen a character
       document.getElementById('ready-btn').disabled = !myChar;
     }
 
@@ -581,6 +580,8 @@
 
     function renderPlayers(playersList) {
       const charEmojis = { Wolf: '🐺', Bear: '🐻', Bull: '🐂', Sheep: '🐑' };
+      
+      // Filter out any connection that hasn't picked a character class yet (hides Admin)
       const gamingPlayers = playersList.filter(p => p.character !== null);
 
       document.getElementById('players-list').innerHTML = gamingPlayers.map(p => {
@@ -674,7 +675,7 @@
     }
 
     function advanceTurn() {
-      fetch(`${BACKEND_URL}/api/market/advance`, { method: 'POST' }).catch(() => toast('Turn advancement failed.', 'err'));
+      fetch(`http://${serverIP}:3000/api/market/advance`, { method: 'POST' }).catch(() => toast('Turn advancement failed.', 'err'));
     }
 
     function showScreen(name) {
