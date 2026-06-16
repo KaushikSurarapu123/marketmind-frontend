@@ -397,6 +397,7 @@
     let roomCode   = '';
     let isHost     = false;
     let myChar     = null;
+    let myPlayerId = 'p_' + Math.random().toString(36).substr(2, 9); 
 
     const CHAR_META = {
       Wolf:  { color: '#7C3AED', bg: '#EEEDFE', power: "Short Squeeze: Forces targeted stock price shift upwards +25% next turn loop." },
@@ -414,10 +415,12 @@
 
     function connectSocket() {
       if (socket) return;
-      socket = io(BACKEND_URL);
+      socket = io(BACKEND_URL, {
+        transports: ['websocket', 'polling']
+      });
 
       socket.on('connect', () => {
-        console.log("Connected to backend, awaiting room details...");
+        console.log("Connected to backend, executing handshake tracking wrapper...");
       });
 
       socket.on('room:code', (data) => {
@@ -427,9 +430,7 @@
       });
 
       socket.on('lobby:error', ({ message }) => {
-        document.getElementById('join-error').textContent = message;
-        document.getElementById('host-error').textContent = message;
-        document.getElementById('lobby-error').textContent = message;
+        toast(message, 'err');
       });
 
       socket.on('lobby:update', ({ players, roomCode: rc }) => {
@@ -440,7 +441,7 @@
         }
 
         const currentScreen = document.querySelector('.screen.active')?.id;
-        if (currentScreen === 'screen-join' && !isHost) {
+        if (currentScreen === 'screen-join') {
           showScreen('lobby');
         }
         renderLobby(players);
@@ -487,22 +488,16 @@
         renderLeaderboard(leaderboard);
       });
 
-      socket.on('power:success', ({ message }) => {
-        toast(message, 'success');
-      });
-
+      socket.on('power:success', ({ message }) => { toast(message, 'success'); });
       socket.on('trade:success', ({ action, ticker, shares, price }) => {
-        toast(`Order executed: ${action} ${shares} shares of ${ticker} at ${formatCurrency(price)}.`, 'success');
+        toast(`Order executed: ${action} ${shares} units of ${ticker}.`, 'success');
       });
-
       socket.on('trade:error', ({ message }) => { toast(message, 'err'); });
     }
 
     function setupHostScreen() {
       isHost = true;
       connectSocket();
-      
-      // If code loaded fast, ensure layout catches it immediately
       if (roomCode) {
         document.getElementById('host-code-display').textContent = roomCode;
         document.getElementById('lobby-code').textContent = roomCode;
@@ -513,10 +508,10 @@
     function hostJoin() {
       const name = document.getElementById('inp-host-name').value.trim();
       if (!name) {
-        document.getElementById('host-error').textContent = 'Please configure an identity name.';
+        toast('Please configure an identity name.', 'err');
         return;
       }
-      socket.emit('lobby:join', { name, roomCode });
+      socket.emit('lobby:join', { name, roomCode, playerId: myPlayerId });
       showScreen('lobby');
     }
 
@@ -524,24 +519,24 @@
       const code = document.getElementById('inp-code').value.trim();
       const name = document.getElementById('inp-name').value.trim();
       if (code.length !== 6 || !name) {
-        document.getElementById('join-error').textContent = 'Valid 6-digit room code and name required.';
+        toast('Valid 6-digit room code and name required.', 'err');
         return;
       }
       roomCode = code;
       connectSocket();
-      socket.emit('lobby:join', { name, roomCode });
+      socket.emit('lobby:join', { name, roomCode, playerId: myPlayerId });
     }
 
     function pickChar(characterName) {
       myChar = characterName;
-      socket.emit('lobby:pick_character', { character: characterName });
+      socket.emit('lobby:pick_character', { character: characterName, playerId: myPlayerId });
       const charEmojis = { Wolf: '🐺', Bear: '🐻', Bull: '🐂', Sheep: '🐑' };
       document.getElementById('user-profile-summary').innerHTML = `Role Class: <strong>${characterName} ${charEmojis[characterName] || ''}</strong>`;
       renderChars();
     }
 
     function readyUp() {
-      socket.emit('lobby:ready');
+      socket.emit('lobby:ready', { playerId: myPlayerId });
     }
 
     function triggerActivePower() {
@@ -550,15 +545,14 @@
         toast("Please select a target security from the dropdown menu first.", "err");
         return;
       }
-      socket.emit('power:activate', { targetTicker });
+      socket.emit('power:activate', { targetTicker, playerId: myPlayerId });
     }
 
     function renderLobby(players) {
-      const relevantPlayer = players.find(p => p.id === socket.id);
+      const relevantPlayer = players.find(p => p.playerId === myPlayerId);
       if (relevantPlayer) {
         myChar = relevantPlayer.character;
       }
-
       renderChars();
       renderPlayers(players);
       document.getElementById('ready-btn').disabled = !myChar;
@@ -671,13 +665,13 @@
     function buy() {
       const ticker = document.getElementById('trade-ticker').value;
       const shares = parseInt(document.getElementById('trade-shares').value);
-      if (ticker && shares > 0) socket.emit('trade:buy', { ticker, shares });
+      if (ticker && shares > 0) socket.emit('trade:buy', { ticker, shares, playerId: myPlayerId });
     }
 
     function sell() {
       const ticker = document.getElementById('trade-ticker').value;
       const shares = parseInt(document.getElementById('trade-shares').value);
-      if (ticker && shares > 0) socket.emit('trade:sell', { ticker, shares });
+      if (ticker && shares > 0) socket.emit('trade:sell', { ticker, shares, playerId: myPlayerId });
     }
 
     function advanceTurn() {
