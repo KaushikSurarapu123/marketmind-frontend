@@ -390,10 +390,7 @@
   <div id="toast"></div>
 
   <script>
-    // ─── Cloud Deployment Synchronized Routing ───────────────────────────────
     const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    
-    // INTEGRATED LIVE LINK: Points directly to your deployment when online
     const BACKEND_URL = isLocal ? 'http://localhost:3000' : 'https://marketmind-backend-st3p.onrender.com';
 
     let socket     = null;
@@ -418,6 +415,10 @@
     function connectSocket() {
       if (socket) return;
       socket = io(BACKEND_URL);
+
+      socket.on('connect', () => {
+        console.log("Connected to backend, awaiting room details...");
+      });
 
       socket.on('room:code', (data) => {
         roomCode = data.roomCode;
@@ -500,6 +501,12 @@
     function setupHostScreen() {
       isHost = true;
       connectSocket();
+      
+      // If code loaded fast, ensure layout catches it immediately
+      if (roomCode) {
+        document.getElementById('host-code-display').textContent = roomCode;
+        document.getElementById('lobby-code').textContent = roomCode;
+      }
       showScreen('host');
     }
 
